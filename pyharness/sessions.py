@@ -46,7 +46,7 @@ class SessionStore:
                 continue
             try:
                 s = self.load(n[:-5])
-                out.append({"id": s["id"], "title": s.get("title") or "(sem título)",
+                out.append({"id": s["id"], "title": s.get("title") or "",
                             "updated": s.get("updated", 0), "root": s.get("root", ""),
                             "root_exists": os.path.isdir(s.get("root", ""))})
             except (OSError, ValueError, KeyError):

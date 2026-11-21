@@ -1,6 +1,6 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>pyharness</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>myPyHarness</title>
 <style>
 :root{--bg:#fff;--fg:#1f2328;--mut:#656d76;--bd:#d0d7de;--card:#f6f8fa;--acc:#0969da;--ok:#1a7f37;--bad:#cf222e}
 @media(prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--mut:#8d96a0;--bd:#30363d;--card:#161b22;--acc:#4493f8;--ok:#3fb950;--bad:#f85149}}
@@ -11,25 +11,35 @@ button.p{background:var(--acc);border-color:var(--acc);color:#fff}button:disable
 /* setup */
 #setup{max-width:680px;margin:0 auto;padding:40px 16px}
 #setup h1{margin:0 0 4px}.sub{color:var(--mut);margin:0 0 24px}
+#langs{display:flex;gap:8px;align-items:center;margin:0 0 20px;color:var(--mut);font-size:14px}
 .step{display:flex;gap:12px;align-items:center;border:1px solid var(--bd);border-radius:8px;padding:12px;margin:10px 0;background:var(--card)}
 .step button{min-width:170px}.step .info{flex:1;min-width:0;word-break:break-all;color:var(--mut);font-size:14px}.step .info.ok{color:var(--ok)}
 #go-start{width:100%;margin-top:8px;padding:10px}#msg{margin:10px 0;min-height:20px;font-size:13px;color:var(--acc);white-space:pre-wrap;word-break:break-all}#msg.err{color:var(--bad)}
 h2{font-size:15px;margin:28px 0 8px}.sess{display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--bd);padding:8px 0}
 .sess .t1{flex:1;min-width:0}.sess .t1 b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sess small{color:var(--mut);word-break:break-all}
-/* chat */
+/* chat: full width */
 #chat{display:flex;flex-direction:column;height:100vh}
 header{display:flex;gap:12px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--bd);flex-wrap:wrap}
 header b{font-size:16px}#st{color:var(--mut);font-size:13px;flex:1;min-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#log{flex:1;overflow:auto;padding:16px;max-width:900px;width:100%;margin:0 auto}
+#log{flex:1;overflow:auto;padding:16px;width:100%}
 .m{margin:10px 0;white-space:pre-wrap;word-wrap:break-word}.u{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px 12px}
 .t{font:13px ui-monospace,Consolas,monospace;color:var(--mut);border-left:3px solid var(--bd);padding:2px 10px;margin:6px 0;white-space:pre-wrap;word-wrap:break-word}
 .t.err{color:var(--bad);border-color:var(--bad)}.t.info{color:var(--acc);border-color:var(--acc)}
 .m.st{border:1px solid var(--acc);border-radius:8px;padding:8px 12px;background:var(--card);font-size:14px}
 iframe.w{display:block;width:100%;border:0;margin:10px 0;height:40px;background:transparent}
-#offer{max-width:900px;width:calc(100% - 32px);margin:0 auto 8px;border:1px solid var(--acc);border-radius:8px;padding:10px 12px;background:var(--card);display:flex;gap:8px;align-items:center;flex-wrap:wrap}#offer span{flex:1;min-width:220px;font-size:14px}
+#thinking{padding:4px 16px 8px;color:var(--mut);font-style:italic;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+#offer{width:calc(100% - 32px);margin:0 16px 8px;border:1px solid var(--acc);border-radius:8px;padding:10px 12px;background:var(--card);display:flex;gap:8px;align-items:center;flex-wrap:wrap}#offer span{flex:1;min-width:220px;font-size:14px}
+.tog{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--mut);cursor:pointer;user-select:none}.tog input{margin:0;cursor:pointer}
+/* clean view: hide what was executed (tool lines, results, answered dialogs); pending dialogs always stay visible */
+#log.clean .t.tool,#log.clean .ap.done{display:none}
+/* permission dialogs: normal = blue; outside the working folder = red with a warning on top */
 .ap{border:1px solid var(--acc);border-radius:8px;padding:10px;margin:10px 0;background:var(--card)}
+.ap.danger{border:2px solid var(--bad);background:linear-gradient(rgba(207,34,46,.12),rgba(207,34,46,.12)),var(--card)}
+.ap .banner{background:var(--bad);color:#fff;font-weight:600;padding:8px 10px;margin:-10px -10px 10px;border-radius:5px 5px 0 0}
+.ap.danger button.p{background:var(--bad);border-color:var(--bad)}
 .ap pre{margin:0 0 8px;white-space:pre-wrap;word-wrap:break-word;font:13px ui-monospace,Consolas,monospace;max-height:260px;overflow:auto}
-form{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--bd);max-width:900px;width:100%;margin:0 auto}
+form{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--bd);width:100%}
 textarea{flex:1;resize:none;height:56px;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:8px;font:inherit}
 /* folder dialog */
 dialog{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:10px;width:min(640px,92vw);padding:16px}
@@ -40,32 +50,73 @@ dialog::backdrop{background:#0008}#cur{font:13px ui-monospace,Consolas,monospace
 </style></head><body>
 
 <div id="setup">
- <h1>pyharness</h1><p class="sub">Agente Codex com acesso restrito a uma pasta. Faça login e escolha o diretório para começar.</p>
- <div class="step"><button id="login">Login</button><span class="info" id="login-info"></span></div>
- <div class="step"><button id="dir">Escolher diretório</button><span class="info" id="dir-info"></span></div>
+ <h1>myPyHarness</h1><p class="sub" data-i18n="sub"></p>
+ <div id="langs"><span data-i18n="lang_label"></span>
+  <button data-lang="en">English</button><button data-lang="pt_br">Português (BR)</button></div>
+ <div class="step"><button id="login" data-i18n="login"></button><span class="info" id="login-info"></span></div>
+ <div class="step"><button id="dir" data-i18n="dir_btn"></button><span class="info" id="dir-info"></span></div>
  <div id="msg"></div>
- <button class="p" id="go-start" disabled>Iniciar</button>
- <h2>Sessões anteriores</h2><div id="sessions"></div><small class="sub" id="sess-folder"></small>
+ <button class="p" id="go-start" data-i18n="start" disabled></button>
+ <h2 data-i18n="prev"></h2><div id="sessions"></div><small class="sub" id="sess-folder"></small>
 </div>
 
 <div id="chat" hidden>
- <header><b>pyharness</b><span id="st"></span>
- <select id="model" title="Modelo"></select><select id="effort" title="Nível de raciocínio"></select><button id="status" title="Mostrar uso e limites da conta no chat">Status</button>
- <select id="mode" title="Modo de aprovação (comandos sempre perguntam)"><option value="ask">Perguntar antes de gravar/acessar URLs</option><option value="auto">Gravar/acessar URLs sem perguntar</option></select>
- <button id="newchat">Nova conversa</button><button id="home">Configuração</button></header>
+ <header><b>myPyHarness</b><span id="st"></span>
+ <select id="model" data-i18n-title="model_tip"></select><select id="effort" data-i18n-title="level_tip"></select>
+ <button id="status" data-i18n="status_btn" data-i18n-title="status_tip"></button>
+ <label class="tog" data-i18n-title="show_cmds_tip"><input type="checkbox" id="showcmds" checked><span data-i18n="show_cmds"></span></label>
+ <button id="newchat" data-i18n="newchat"></button><button id="home" data-i18n="config"></button></header>
  <div id="log"></div>
- <div id="offer" hidden><span>Este diretório não tem um <b>AGENTS.md</b>. Quer que eu crie um? Eu faço algumas perguntas sobre o projeto e escrevo o arquivo.</span><button class="p" id="ag-yes">Criar AGENTS.md</button><button id="ag-no">Não, obrigado</button></div>
- <form id="f"><textarea id="in" placeholder="Pergunte ao agente… (Enter envia, Shift+Enter quebra linha)"></textarea>
- <button class="p" id="send">Enviar</button><button type="button" id="stop" disabled>Parar</button></form>
+ <div id="thinking" hidden data-i18n="thinking"></div>
+ <div id="offer" hidden><span data-i18n="offer_text"></span><button class="p" id="ag-yes" data-i18n="offer_yes"></button><button id="ag-no" data-i18n="offer_no"></button></div>
+ <form id="f"><textarea id="in" data-i18n-ph="placeholder"></textarea>
+ <button class="p" id="send" data-i18n="send"></button><button type="button" id="stop" data-i18n="stop" disabled></button></form>
 </div>
 
-<dialog id="dlg"><b>Escolher diretório do projeto</b>
-<p style="margin:4px 0;color:var(--mut);font-size:13px">O agente só poderá ler e gravar dentro dele.</p>
-<div class="row" style="justify-content:stretch"><input id="pin" placeholder="Digite ou cole um caminho"><button id="go">Ir</button></div>
+<dialog id="dlg"><b data-i18n="dlg_title"></b>
+<p style="margin:4px 0;color:var(--mut);font-size:13px" data-i18n="dlg_hint"></p>
+<div class="row" style="justify-content:stretch"><input id="pin" data-i18n-ph="path_ph"><button id="go" data-i18n="go"></button></div>
 <div id="cur"></div><div id="dirs"></div>
-<div class="row"><button id="cancel">Cancelar</button><button class="p" id="pick">Usar esta pasta</button></div></dialog>
+<div class="row"><button id="cancel" data-i18n="cancel"></button><button class="p" id="pick" data-i18n="pick"></button></div></dialog>
 
 <script>
+/* ---------- language ---------- */
+const I18N={
+ en:{sub:"Codex agent that works inside a folder you choose. Sign in and pick the directory to start.",lang_label:"Language",
+  login:"Login",dir_btn:"Choose directory",start:"Start",prev:"Previous sessions",none_saved:"No saved sessions yet.",saved_in:"Saved in: {f}",
+  cont:"Continue",login_first_tip:"Sign in first",folder_gone:" (folder no longer exists)",opening_login:"Opening the browser to sign in…",
+  connected:"✔ Connected",connected_as:"✔ Connected as {who}",not_connected:"Not connected",no_dir:"No directory chosen",
+  model_tip:"Model",level_tip:"Reasoning level",status_btn:"Status",status_tip:"Show account usage and limits in the chat",show_cmds:"Show commands",show_cmds_tip:"Show what the agent executed (commands, file reads and writes, results). Turn off for a clean view with only the messages.",
+  newchat:"New chat",config:"Configuration",newchat_title:"New chat",untitled:"(untitled)",
+  placeholder:"Ask the agent… (Enter sends, Shift+Enter for a new line)",send:"Send",stop:"Stop",thinking:"Thinking...",
+  offer_text:"This directory has no AGENTS.md. Want me to create one? I will ask a few questions about the project and write the file.",
+  offer_yes:"Create AGENTS.md",offer_no:"No, thanks",allow:"Allow",deny:"Deny",approved:"✔ approved",denied:"✘ denied",
+  no_models:"(no models)",no_models_err:"Could not get the model list{err}. Try again via Configuration → Start.",
+  dlg_title:"Choose the project directory",dlg_hint:"The agent works inside it. Anything outside needs your explicit approval each time.",
+  path_ph:"Type or paste a path",go:"Go",cancel:"Cancel",pick:"Use this folder",drives:"(drives)"},
+ pt_br:{sub:"Agente Codex que trabalha dentro de uma pasta que você escolhe. Faça login e escolha o diretório para começar.",lang_label:"Idioma",
+  login:"Login",dir_btn:"Escolher diretório",start:"Iniciar",prev:"Sessões anteriores",none_saved:"Nenhuma sessão salva ainda.",saved_in:"Salvas em: {f}",
+  cont:"Continuar",login_first_tip:"Faça login primeiro",folder_gone:" (pasta não existe mais)",opening_login:"Abrindo o navegador para login…",
+  connected:"✔ Conectado",connected_as:"✔ Conectado como {who}",not_connected:"Não conectado",no_dir:"Nenhum diretório escolhido",
+  model_tip:"Modelo",level_tip:"Nível de raciocínio",status_btn:"Status",status_tip:"Mostrar uso e limites da conta no chat",show_cmds:"Mostrar comandos",show_cmds_tip:"Mostra o que o agente executou (comandos, leituras e gravações de arquivos, resultados). Desligue para uma visão limpa só com as mensagens.",
+  newchat:"Nova conversa",config:"Configuração",newchat_title:"Nova conversa",untitled:"(sem título)",
+  placeholder:"Pergunte ao agente… (Enter envia, Shift+Enter quebra linha)",send:"Enviar",stop:"Parar",thinking:"Pensando...",
+  offer_text:"Este diretório não tem um AGENTS.md. Quer que eu crie um? Eu faço algumas perguntas sobre o projeto e escrevo o arquivo.",
+  offer_yes:"Criar AGENTS.md",offer_no:"Não, obrigado",allow:"Permitir",deny:"Negar",approved:"✔ aprovado",denied:"✘ negado",
+  no_models:"(sem modelos)",no_models_err:"Não foi possível obter a lista de modelos{err}. Tente novamente em Configuração → Iniciar.",
+  dlg_title:"Escolher o diretório do projeto",dlg_hint:"O agente trabalha dentro dele. Qualquer coisa fora dele precisa da sua aprovação explícita, a cada vez.",
+  path_ph:"Digite ou cole um caminho",go:"Ir",cancel:"Cancelar",pick:"Usar esta pasta",drives:"(unidades)"}
+};
+let LANG="__LANG__";if(!I18N[LANG])LANG="en";
+const tt=(k,v)=>{let s=(I18N[LANG]||I18N.en)[k]??I18N.en[k]??k;for(const x in v||{})s=s.replace("{"+x+"}",v[x]);return s};
+function applyLang(){
+ document.documentElement.lang=LANG==="pt_br"?"pt-BR":"en";
+ document.querySelectorAll("[data-i18n]").forEach(e=>e.textContent=tt(e.dataset.i18n));
+ document.querySelectorAll("[data-i18n-ph]").forEach(e=>e.placeholder=tt(e.dataset.i18nPh));
+ document.querySelectorAll("[data-i18n-title]").forEach(e=>e.title=tt(e.dataset.i18nTitle));
+ document.querySelectorAll("#langs button").forEach(b=>b.className=b.dataset.lang===LANG?"p":"");
+}
+
 const TOKEN="__TOKEN__",$=id=>document.getElementById(id),log=$("log");
 let next=0,cur=null,st={},view=null;
 const api=(p,b)=>fetch("/api/"+p,{method:b?"POST":"GET",headers:{"X-Token":TOKEN,"Content-Type":"application/json"},body:b?JSON.stringify(b):undefined}).then(r=>r.json());
@@ -103,45 +154,50 @@ function handle(e){
   case"assistant":cur=null;log.appendChild(renderAnswer(e.text));scroll();break;
   case"delta":if(!cur)cur=add("m","");cur.textContent+=e.text;scroll();break;
   case"message_end":if(cur){cur.replaceWith(renderAnswer(cur.textContent));scroll()}cur=null;break;
-  case"tool_call":add("t","▶ "+e.name+" "+JSON.stringify(e.args).slice(0,300));break;
-  case"tool_result":add("t","  "+e.output.slice(0,600));break;
+  case"tool_call":add("t tool","▶ "+e.name+" "+JSON.stringify(e.args).slice(0,300));break;
+  case"tool_result":add("t tool","  "+e.output.slice(0,600));break;
   case"info":add("t info",e.text);say(e.text);break;
   case"error":add("t err",e.text);say(e.text,true);break;
   case"reset":log.innerHTML="";cur=null;say("");break;
-  case"approval":{const d=document.createElement("div");d.className="ap";d.id="ap"+e.id;
+  case"approval":{const d=document.createElement("div");d.className="ap"+(e.danger?" danger":"");d.id="ap"+e.id;
+   if(e.banner){const bn=document.createElement("div");bn.className="banner";bn.textContent="⚠ "+e.banner;d.appendChild(bn)}
    const pre=document.createElement("pre");pre.textContent=e.text;d.appendChild(pre);
-   for(const[l,a,c]of[["Permitir",true,"p"],["Negar",false,""]]){const b=document.createElement("button");b.textContent=l;b.className=c;b.style.marginRight="8px";
+   for(const[k,a,c]of[["allow",true,"p"],["deny",false,""]]){const b=document.createElement("button");b.textContent=tt(k);b.className=c;b.style.marginRight="8px";
     b.onclick=()=>api("approve",{id:e.id,allow:a});d.appendChild(b)}
    log.appendChild(d);scroll();break}
-  case"approval_done":{const d=$("ap"+e.id);if(d){d.innerHTML="";d.textContent=e.allow?"✔ aprovado":"✘ negado"}break}
+  case"approval_done":{const d=$("ap"+e.id);if(d){d.className="ap done";d.innerHTML="";d.textContent=tt(e.allow?"approved":"denied")}break}
  }}
-function fmt(t){return new Date(t*1000).toLocaleString("pt-BR")}
+function fmt(t){return new Date(t*1000).toLocaleString(LANG==="pt_br"?"pt-BR":"en-US")}
 async function loadSessions(){
  const r=await api("sessions"),box=$("sessions");box.innerHTML="";
- $("sess-folder").textContent="Salvas em: "+r.folder;
- if(!r.sessions.length){box.textContent="Nenhuma sessão salva ainda.";box.style.color="var(--mut)";return}
+ $("sess-folder").textContent=tt("saved_in",{f:r.folder});
+ if(!r.sessions.length){box.textContent=tt("none_saved");box.style.color="var(--mut)";return}
  for(const s of r.sessions){
   const d=document.createElement("div");d.className="sess";
   const t=document.createElement("div");t.className="t1";
-  const b=document.createElement("b");b.textContent=s.title;const sm=document.createElement("small");sm.textContent=fmt(s.updated)+" · "+s.root+(s.root_exists?"":" (pasta não existe mais)");
+  const b=document.createElement("b");b.textContent=s.title||tt("untitled");const sm=document.createElement("small");sm.textContent=fmt(s.updated)+" · "+s.root+(s.root_exists?"":tt("folder_gone"));
   t.append(b,sm);
-  const btn=document.createElement("button");btn.textContent="Continuar";btn.disabled=!s.root_exists||!st.logged_in;
-  btn.title=st.logged_in?"":"Faça login primeiro";
+  const btn=document.createElement("button");btn.textContent=tt("cont");btn.disabled=!s.root_exists||!st.logged_in;
+  btn.title=st.logged_in?"":tt("login_first_tip");
   btn.onclick=async()=>{const x=await api("resume",{id:s.id});if(x.error)say(x.error,true)};
   d.append(t,btn);box.appendChild(d)}}
 function render(){
+ if(st.lang&&st.lang!==LANG){LANG=st.lang;applyLang();if(!st.started)loadSessions()}
  const chat=!!st.started;
  $("setup").hidden=chat;$("chat").hidden=!chat;
  if(view!==chat){view=chat;if(!chat)loadSessions()}
  if(chat){
-  $("st").textContent=(st.title||"Nova conversa")+" · "+st.root;
+  $("st").textContent=(st.title||tt("newchat_title"))+" · "+st.root;
   if(!modelsLoaded){modelsLoaded=true;loadModels()}
   syncModel();
   $("offer").hidden=!st.offer_agents;
-  $("mode").value=st.mode;$("send").disabled=st.busy;$("stop").disabled=!st.busy;$("home").disabled=st.busy;$("newchat").disabled=st.busy;
+  $("send").disabled=st.busy;$("stop").disabled=!st.busy;$("home").disabled=st.busy;$("newchat").disabled=st.busy;
+  // "Thinking..." while the agent works; hidden while it waits for the user's decision on a dialog
+  const waiting=!!document.querySelector(".ap button");
+  $("thinking").hidden=!(st.busy&&!waiting);
  }else{
-  const li=$("login-info");li.textContent=st.logged_in?"✔ Conectado"+(st.who?" como "+st.who:""):"Não conectado";li.className="info"+(st.logged_in?" ok":"");
-  const di=$("dir-info");di.textContent=st.root?"✔ "+st.root:"Nenhum diretório escolhido";di.className="info"+(st.root?" ok":"");
+  const li=$("login-info");li.textContent=st.logged_in?(st.who?tt("connected_as",{who:st.who}):tt("connected")):tt("not_connected");li.className="info"+(st.logged_in?" ok":"");
+  const di=$("dir-info");di.textContent=st.root?"✔ "+st.root:tt("no_dir");di.className="info"+(st.root?" ok":"");
   $("go-start").disabled=!(st.logged_in&&st.root);
  }}
 let lastLogin=null,modelsLoaded=false,models=[],shown="";
@@ -149,8 +205,8 @@ async function loadModels(){
  const r=await api("models");models=r.models||[];
  const sel=$("model");sel.innerHTML="";
  for(const m of models){const o=document.createElement("option");o.value=m.slug;o.textContent=m.name===m.slug?m.slug:m.name+" ("+m.slug+")";sel.appendChild(o)}
- if(!models.length){const o=document.createElement("option");o.textContent="(sem modelos)";sel.appendChild(o);
-  add("t err","Não foi possível obter a lista de modelos"+(r.error?": "+r.error:"")+". Tente novamente em Configuração → Iniciar.");modelsLoaded=false}
+ if(!models.length){const o=document.createElement("option");o.textContent=tt("no_models");sel.appendChild(o);
+  add("t err",tt("no_models_err",{err:r.error?": "+r.error:""}));modelsLoaded=false}
  shown="";syncModel()}
 function syncModel(){
  const m=models.find(x=>x.slug===st.model);if(!m)return;
@@ -168,13 +224,18 @@ $("f").onsubmit=async ev=>{ev.preventDefault();const t=$("in").value.trim();if(!
  const r=await api("send",{text:t});if(r.ok)$("in").value=""};
 $("in").onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("f").requestSubmit()}};
 $("stop").onclick=()=>api("stop",{});
-$("login").onclick=()=>{say("Abrindo o navegador para login…");api("login",{})};
+$("login").onclick=()=>{say(tt("opening_login"));api("login",{})};
+document.querySelectorAll("#langs button").forEach(b=>b.onclick=async()=>{await api("lang",{lang:b.dataset.lang})});
 $("model").onchange=async e=>{const r=await api("model",{model:e.target.value});if(r.error)alert(r.error)};
 $("effort").onchange=async e=>{const r=await api("model",{model:$("model").value,effort:e.target.value});if(r.error)alert(r.error)};
 $("ag-yes").onclick=()=>api("agents",{action:"create"});
 $("ag-no").onclick=()=>api("agents",{action:"decline"});
 $("status").onclick=()=>api("status",{});
-$("mode").onchange=e=>api("mode",{mode:e.target.value});
+/* show/hide executed commands: on by default, remembered in this browser */
+function applyCmds(){const on=$("showcmds").checked;log.classList.toggle("clean",!on);scroll()}
+try{if(localStorage.getItem("showcmds")==="0")$("showcmds").checked=false}catch(e){}
+$("showcmds").onchange=()=>{try{localStorage.setItem("showcmds",$("showcmds").checked?"1":"0")}catch(e){}applyCmds()};
+applyCmds();
 $("go-start").onclick=async()=>{const r=await api("start",{});if(r.error)say(r.error,true)};
 $("newchat").onclick=async()=>{const r=await api("start",{});if(r.error)alert(r.error)};
 $("home").onclick=async()=>{const r=await api("home",{});if(r.error)alert(r.error)};
@@ -182,7 +243,7 @@ $("home").onclick=async()=>{const r=await api("home",{});if(r.error)alert(r.erro
 let browsing="";
 async function browse(p){const r=await api("browse"+(p!==undefined?"?path="+encodeURIComponent(p):""));
  if(r.error){alert(r.error);return}
- browsing=r.path;$("cur").textContent=r.path||"(unidades)";$("pin").value=r.path;$("pick").disabled=!r.path;
+ browsing=r.path;$("cur").textContent=r.path||tt("drives");$("pin").value=r.path;$("pick").disabled=!r.path;
  const box=$("dirs");box.innerHTML="";
  const mk=(label,path)=>{const d=document.createElement("div");d.textContent=label;d.onclick=()=>browse(path);box.appendChild(d)};
  if(r.parent!==null)mk("⬆ ..",r.parent);
@@ -192,5 +253,6 @@ $("go").onclick=()=>browse($("pin").value);
 $("pin").onkeydown=e=>{if(e.key==="Enter")browse($("pin").value)};
 $("cancel").onclick=()=>$("dlg").close();
 $("pick").onclick=async()=>{const r=await api("setroot",{path:browsing});if(r.ok)$("dlg").close();else alert(r.error)};
+applyLang();
 poll();
 </script></body></html>

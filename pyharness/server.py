@@ -9,9 +9,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .agent import AGENTS_INTERVIEW, Agent, agents_md
+from . import i18n, llm, status
+from .agent import Agent, agents_md
 from .auth import Auth
-from . import llm, status
 from .sessions import SessionStore
 
 UI = (Path(__file__).parent / "ui.html").read_text("utf-8")
@@ -46,9 +46,11 @@ def browse(path):
 
 
 class App:
-    def __init__(self, root, model, mode, effort, sessions_dir):
+    def __init__(self, root, model, effort, sessions_dir, lang=None):
         self.auth = Auth()
         self.store = SessionStore(sessions_dir)
+        self.lang = i18n.norm(lang or self._prefs().get("lang"))
+        self.auth.lang = self.lang
         self.events, self.lock = [], threading.RLock()
         self.approvals = {}
         self.busy = False
@@ -58,10 +60,21 @@ class App:
         self.token = secrets.token_urlsafe(24)
         self.models, self.models_error = None, None
         self.offer_agents = False
-        self.agent = Agent(None, self.auth, model, self.emit, self.approve, mode, effort,
-                           protect=[self.store.path])
+        self.agent = Agent(None, self.auth, model, self.emit, self.approve, effort,
+                           protect=[self.store.path], lang=self.lang)
         if root:
             self.agent.set_root(root)
+
+    def tr(self, key, **kw):
+        return i18n.t(self.lang, key, **kw)
+
+    def set_lang(self, lang):
+        if lang not in i18n.LANGS:
+            raise ValueError("unknown language")
+        self.lang = self.auth.lang = self.agent.lang = lang
+        prefs = self._prefs()
+        prefs["lang"] = lang
+        self._save_prefs(prefs)
 
     # ---- events / transcript -------------------------------------------
     def _push(self, ev):
@@ -98,7 +111,7 @@ class App:
             try:
                 self.store.save(s)
             except OSError as e:
-                self._push({"type": "error", "text": f"Não foi possível salvar a sessão: {e}"})
+                self._push({"type": "error", "text": self.tr("srv.save_failed", err=e)})
 
     def _enter(self, session):
         """Switch to `session` and replay its transcript to the UI."""
@@ -112,11 +125,12 @@ class App:
                 self._push(ev)
 
     # ---- actions ---------------------------------------------------------
-    def approve(self, summary):
+    def approve(self, summary, banner=None):
+        """Ask the user. `banner` is set for out-of-folder access: the UI shows the dialog in red with it on top."""
         aid = secrets.token_hex(6)
         slot = {"ev": threading.Event(), "allow": False}
         self.approvals[aid] = slot
-        self.emit({"type": "approval", "id": aid, "text": summary})
+        self.emit({"type": "approval", "id": aid, "text": summary, "danger": bool(banner), "banner": banner})
         while not slot["ev"].wait(0.5):
             if self.agent.cancel.is_set():
                 break
@@ -127,7 +141,8 @@ class App:
     def status(self):
         a = self.agent
         return {"logged_in": self.auth.logged_in(), "who": self.auth.who(), "model": a.model,
-                "root": a.sb.root if a.sb else None, "mode": a.mode, "effort": a.effort, "offer_agents": self.offer_agents, "busy": self.busy,
+                "root": a.sb.root if a.sb else None, "effort": a.effort, "offer_agents": self.offer_agents, "busy": self.busy,
+                "lang": self.lang,
                 "started": self.started, "title": (self.session or {}).get("title", "")}
 
     def load_models(self, force=False):
@@ -152,7 +167,7 @@ class App:
         self.load_models()
         m = next((m for m in self.models or [] if m["slug"] == slug), None)
         if not m:
-            raise ValueError("modelo indisponível para esta conta")
+            raise ValueError(self.tr("srv.model_na"))
         self.agent.model = slug
         self.agent.effort = effort if effort in m["efforts"] else m["default_effort"]
 
@@ -164,42 +179,51 @@ class App:
             err = f"{type(e).__name__}: {e}"
         a = self.agent
         self.emit({"type": "status", "text": status.format_status(
-            payload, err, self.auth.who(), a.model, a.effort, a.tokens)})
+            payload, err, self.auth.who(), a.model, a.effort, a.tokens, self.lang)})
 
     # ---- AGENTS.md offer -------------------------------------------------------
     def _prefs_file(self):
         return os.path.join(self.store.path, "prefs.json")
 
-    def _declined(self):
+    def _prefs(self):
         try:
             with open(self._prefs_file(), encoding="utf-8") as f:
-                return json.load(f).get("agents_declined", [])
+                d = json.load(f)
+                return d if isinstance(d, dict) else {}
         except (OSError, ValueError):
-            return []
+            return {}
+
+    def _save_prefs(self, prefs):
+        try:
+            os.makedirs(self.store.path, exist_ok=True)
+            with open(self._prefs_file(), "w", encoding="utf-8") as f:
+                json.dump(prefs, f)
+        except OSError:
+            pass
+
+    def _declined(self):
+        return self._prefs().get("agents_declined", [])
 
     def decline_agents(self):
         self.offer_agents = False
         root = self.agent.sb.root
-        d = self._declined()
+        prefs = self._prefs()
+        d = prefs.get("agents_declined", [])
         if root not in d:
-            try:
-                os.makedirs(self.store.path, exist_ok=True)
-                with open(self._prefs_file(), "w", encoding="utf-8") as f:
-                    json.dump({"agents_declined": d + [root]}, f)
-            except OSError:
-                pass
+            prefs["agents_declined"] = d + [root]
+            self._save_prefs(prefs)
 
     def create_agents(self):
         self.offer_agents = False
-        return self.start_turn(AGENTS_INTERVIEW, display="Criar AGENTS.md")
+        return self.start_turn(self.tr("agents.interview"), display=self.tr("srv.create_agents"))
 
     def check_ready(self, need_root=True):
         if self.busy:
-            return "o agente está ocupado; pare-o antes"
+            return self.tr("srv.busy")
         if not self.auth.logged_in():
-            return "faça login primeiro"
+            return self.tr("srv.login_first")
         if need_root and not self.agent.sb:
-            return "escolha um diretório primeiro"
+            return self.tr("srv.pick_dir")
         return None
 
     def new_session(self):
@@ -213,7 +237,7 @@ class App:
         s = self.store.load(sid)
         self.save()  # keep the current session before switching folders
         if not os.path.isdir(s.get("root", "")):
-            raise ValueError("a pasta desta sessão não existe mais")
+            raise ValueError(self.tr("srv.folder_gone"))
         self.agent.set_root(s["root"])
         self.offer_agents = False
         self._enter(s)
@@ -250,9 +274,9 @@ class App:
         def go():
             try:
                 self.auth.login(log=lambda m: self.emit({"type": "info", "text": m}))
-                self.emit({"type": "info", "text": "Login realizado com sucesso."})
+                self.emit({"type": "info", "text": self.tr("srv.login_ok")})
             except Exception as e:
-                self.emit({"type": "error", "text": f"Falha no login: {e}"})
+                self.emit({"type": "error", "text": self.tr("srv.login_fail", err=e)})
 
         threading.Thread(target=go, daemon=True).start()
 
@@ -291,7 +315,7 @@ def make_handler(app, port):
             q = parse_qs(u.query)
             if u.path == "/":
                 if self._guard(q.get("t", [""])[0]):
-                    self._send(200, UI.replace("__TOKEN__", app.token), "text/html")
+                    self._send(200, UI.replace("__TOKEN__", app.token).replace("__LANG__", app.lang), "text/html")
                 return
             if u.path not in ("/api/events", "/api/browse", "/api/sessions", "/api/models"):
                 return self._send(404, {"error": "not found"})
@@ -304,7 +328,7 @@ def make_handler(app, port):
                 self._send(200, {"events": evs, "next": since + len(evs), "status": app.status()})
             elif u.path == "/api/models":
                 if not app.auth.logged_in():
-                    return self._send(200, {"models": [], "error": "faça login primeiro"})
+                    return self._send(200, {"models": [], "error": app.tr("srv.login_first")})
                 app.load_models(force=q.get("refresh") == ["1"])
                 self._send(200, {"models": app.models, "error": app.models_error})
             elif u.path == "/api/sessions":
@@ -341,9 +365,11 @@ def make_handler(app, port):
             if p == "/api/login":
                 app.start_login()
                 return self._send(200, {"ok": True})
-            if p == "/api/mode":
-                if body.get("mode") in ("ask", "auto"):
-                    app.agent.mode = body["mode"]
+            if p == "/api/lang":
+                try:
+                    app.set_lang(body.get("lang"))
+                except ValueError as e:
+                    return self._send(400, {"error": str(e)})
                 return self._send(200, {"ok": True})
             if p == "/api/model":
                 try:
@@ -353,7 +379,7 @@ def make_handler(app, port):
                 return self._send(200, {"ok": True})
             if p == "/api/agents":
                 if not app.started or not app.agent.sb:
-                    return self._send(409, {"error": "nenhuma sessão ativa"})
+                    return self._send(409, {"error": app.tr("srv.no_session")})
                 if body.get("action") == "create":
                     ok = app.create_agents()
                     return self._send(200 if ok else 409, {"ok": ok})
@@ -365,11 +391,11 @@ def make_handler(app, port):
             if p == "/api/setroot":
                 path = os.path.realpath(str(body.get("path", "")))
                 if app.busy or app.started:
-                    return self._send(409, {"error": "volte à configuração para trocar a pasta"})
+                    return self._send(409, {"error": app.tr("srv.go_config")})
                 if not os.path.isdir(path):
-                    return self._send(400, {"error": "não é uma pasta"})
+                    return self._send(400, {"error": app.tr("srv.not_folder")})
                 if os.path.dirname(path) == path:
-                    return self._send(400, {"error": "escolha uma pasta, não a raiz do disco"})
+                    return self._send(400, {"error": app.tr("srv.not_root")})
                 app.agent.set_root(path)
                 return self._send(200, {"ok": True})
             if p in ("/api/start", "/api/resume"):
@@ -380,11 +406,11 @@ def make_handler(app, port):
                 try:
                     app.resume(body.get("id")) if resume else app.new_session()
                 except (ValueError, OSError, KeyError) as e:
-                    return self._send(400, {"error": f"não foi possível abrir a sessão: {e}"})
+                    return self._send(400, {"error": app.tr("srv.open_failed", err=e)})
                 return self._send(200, {"ok": True})
             if p == "/api/home":
                 if app.busy:
-                    return self._send(409, {"error": "o agente está ocupado; pare-o antes"})
+                    return self._send(409, {"error": app.tr("srv.busy")})
                 app.go_home()
                 return self._send(200, {"ok": True})
             self._send(404, {"error": "not found"})
@@ -392,8 +418,8 @@ def make_handler(app, port):
     return H
 
 
-def serve(root, model, mode, effort, sessions_dir, port=8765, open_browser=True):
-    app = App(root, model, mode, effort, sessions_dir)
+def serve(root, model, effort, sessions_dir, port=8765, open_browser=True, lang=None):
+    app = App(root, model, effort, sessions_dir, lang)
     try:
         httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(app, port))
     except OSError:
@@ -401,7 +427,7 @@ def serve(root, model, mode, effort, sessions_dir, port=8765, open_browser=True)
         port = httpd.server_address[1]
         httpd.RequestHandlerClass = make_handler(app, port)
     url = f"http://127.0.0.1:{port}/?t={app.token}"
-    print(f"Sessões salvas em: {app.store.path}\nInterface: {url}\nCtrl+C para sair.")
+    print(app.tr("srv.console", sessions=app.store.path, url=url))
     if open_browser:
         try:
             webbrowser.open(url)

@@ -17,6 +17,8 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+from .i18n import t
+
 CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"  # public Codex CLI client id
 ISSUER = "https://auth.openai.com"
 REDIRECT_PORT = 1455
@@ -47,6 +49,7 @@ class Auth:
     def __init__(self, store: Path = STORE):
         self.store = store
         self.lock = threading.RLock()
+        self.lang = "en"  # language of messages; set by the app
         self.data = {}
         self._load()
 
@@ -84,8 +87,7 @@ class Auth:
                 pass
 
     # ---- HTTP helper -------------------------------------------------
-    @staticmethod
-    def _post(url, body: bytes, content_type: str) -> dict:
+    def _post(self, url, body: bytes, content_type: str) -> dict:
         req = urllib.request.Request(
             url, data=body, method="POST",
             headers={"Content-Type": content_type, "User-Agent": UA, "Accept": "application/json"},
@@ -94,9 +96,9 @@ class Auth:
             with urllib.request.urlopen(req, timeout=30) as r:
                 return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
-            raise AuthError(f"HTTP {e.code} from auth server: {e.read().decode('utf-8', 'replace')[:500]}")
+            raise AuthError(t(self.lang, "auth.http", code=e.code, body=e.read().decode("utf-8", "replace")[:500]))
         except urllib.error.URLError as e:
-            raise AuthError(f"Cannot reach auth server: {e.reason}")
+            raise AuthError(t(self.lang, "auth.unreachable", reason=e.reason))
 
     def _apply_tokens(self, t: dict):
         for k in ("access_token", "refresh_token", "id_token"):
@@ -122,6 +124,7 @@ class Auth:
         }
         url = f"{ISSUER}/oauth/authorize?" + urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
         result, done = {}, threading.Event()
+        done_msg = t(self.lang, "auth.done_page")
 
         class H(BaseHTTPRequestHandler):
             def log_message(self, *a):
@@ -140,15 +143,15 @@ class Auth:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
-                self.wfile.write("<h3>pyharness: login concluído. Você pode fechar esta aba.</h3>".encode("utf-8"))
+                self.wfile.write(("<meta charset=utf-8><h3>" + done_msg + "</h3>").encode("utf-8"))
                 done.set()
 
         try:
             srv = HTTPServer(("127.0.0.1", REDIRECT_PORT), H)
         except OSError as e:
-            raise AuthError(f"Cannot listen on port {REDIRECT_PORT} (is the Codex CLI login running?): {e}")
+            raise AuthError(t(self.lang, "auth.port", port=REDIRECT_PORT, err=e))
         srv.timeout = 1
-        log("Abra este endereço para entrar com sua conta ChatGPT:\n" + url)
+        log(t(self.lang, "auth.open_url", url=url))
         if open_browser:
             try:
                 webbrowser.open(url)
@@ -161,23 +164,23 @@ class Auth:
         finally:
             srv.server_close()
         if not done.is_set():
-            raise AuthError("Tempo esgotado no login.")
+            raise AuthError(t(self.lang, "auth.timeout"))
         if result.get("error") or not result.get("code"):
-            raise AuthError(f"Falha no login: {result.get('error') or 'nenhum código retornado'}")
+            raise AuthError(t(self.lang, "auth.failed", err=result.get("error") or t(self.lang, "auth.no_code")))
         body = urllib.parse.urlencode({
             "grant_type": "authorization_code", "code": result["code"],
             "redirect_uri": REDIRECT_URI, "client_id": CLIENT_ID, "code_verifier": verifier,
         }).encode()
         with self.lock:
             self._apply_tokens(self._post(f"{ISSUER}/oauth/token", body, "application/x-www-form-urlencoded"))
-        log(f"Login realizado: {self.who()}".strip())
+        log(t(self.lang, "auth.logged_in", who=self.who()).strip())
 
     # ---- refresh / access --------------------------------------------
     def refresh(self, force=False):
         with self.lock:
             rt = self.data.get("refresh_token")
             if not rt:
-                raise AuthError("Não está logado. Faça o login primeiro.")
+                raise AuthError(t(self.lang, "auth.not_logged"))
             body = json.dumps({
                 "client_id": CLIENT_ID, "grant_type": "refresh_token",
                 "refresh_token": rt, "scope": "openid profile email",
@@ -188,7 +191,7 @@ class Auth:
         """Return (access_token, account_id), refreshing when near expiry."""
         with self.lock:
             if not self.logged_in():
-                raise AuthError("Não está logado. Faça o login primeiro.")
+                raise AuthError(t(self.lang, "auth.not_logged"))
             exp = jwt_claims(self.data.get("access_token", "")).get("exp", 0)
             if self.data.get("refresh_token") and exp - time.time() < 120:
                 self.refresh()

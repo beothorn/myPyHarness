@@ -15,15 +15,17 @@ O myPyHarness é o oposto: alguns arquivos Python que você copia para perto do 
 
 - **Soltar e usar.** Copie a pasta, rode um comando. Só precisa de Python 3.8+.
 - **Login com ChatGPT.** Um clique no navegador; os tokens ficam na sua pasta de usuário, nunca no projeto.
-- **Trabalha dentro de uma pasta que você escolhe.** O agente lê e grava ali e em nenhum outro lugar.
+- **Trabalha dentro de uma pasta que você escolhe.** Qualquer coisa fora dela precisa da sua aprovação explícita, a cada vez, em um diálogo vermelho.
 - **Interface no navegador ou terminal.** Uma pequena página local (padrão) ou um chat simples com `--cli`.
 - **Escolha de modelo e nível de raciocínio** a partir da lista que a sua conta realmente pode usar, e o botão **Status** mostra quanto dos limites do seu plano você já usou.
 - **Respostas ricas.** O modelo responde em HTML e pode montar widgets interativos: blocos estilizados, botões, gráficos SVG, JavaScript. Eles rodam isolados: o código do widget não alcança o app, seus arquivos nem a rede.
 - **Uma boa caixa de ferramentas.** Listar, ler, buscar, gravar e editar arquivos; tamanho de pastas; busca na web e leitura de páginas; comandos de shell.
-- **Você no controle.** Gravações, edições e acesso a URLs pedem confirmação (configurável). Comandos de shell **sempre** pedem: você vê o comando, uma explicação em linguagem simples e a pasta, e permite ou nega. O agente é informado da sua decisão.
+- **Você no controle.** Toda gravação, edição, acesso a URL e comando de shell pede confirmação; não existe opção de aprovar tudo automaticamente. Os comandos mostram o comando em si, uma explicação em linguagem simples e a pasta. O agente é informado da sua decisão. Ler, alterar ou executar algo **fora da pasta de trabalho** aparece em vermelho, com um aviso no topo ("O agente quer ler conteúdo, certifique-se de que não é conteúdo sensível").
 - **Sessões salvas** a cada resposta, para continuar depois pela tela inicial.
-- **Onboarding de `AGENTS.md`.** Em uma pasta sem o arquivo, o agente oferece uma entrevista sobre o projeto e o escreve. Se já existir, ele é usado como instruções do projeto.
-- **Interface em português.**
+- **Onboarding de `AGENTS.md`.** Em uma pasta sem o arquivo, o agente oferece uma entrevista sobre o projeto e o escreve. Se já existir, uma conversa nova e vazia manda o modelo lê-lo primeiro.
+- **Inglês e português do Brasil (`pt_br`).** Escolha o idioma na primeira tela; todos os diálogos seguem a escolha, e as respostas do modelo também. A escolha fica salva.
+- **Chat em largura total** com o indicador "Pensando..." enquanto o agente trabalha.
+- **Visão limpa ou completa.** O botão **Mostrar comandos** no cabeçalho (ligado por padrão) alterna entre a visão completa, para revisar exatamente o que foi executado, e uma visão limpa só com as mensagens trocadas. Diálogos de permissão que esperam por você sempre continuam visíveis. A escolha fica salva no navegador.
 
 ## Começando
 
@@ -35,7 +37,7 @@ O myPyHarness é o oposto: alguns arquivos Python que você copia para perto do 
    ```
 
    (No Windows, `py harness.py` também funciona.) O navegador abre o app.
-3. Na tela inicial:
+3. Na tela inicial, escolha o idioma (English / Português (BR)) e depois:
    1. **Login**: entre com a sua conta ChatGPT.
    2. **Escolher diretório**: escolha a pasta do projeto em que o agente pode trabalhar.
    3. **Iniciar**: fica habilitado quando os dois passos estão prontos.
@@ -51,18 +53,18 @@ As conversas anteriores aparecem em "Sessões anteriores" na tela inicial. Ficam
 | `--cli` | Chat no terminal em vez da interface web |
 | `--model NOME` | Modelo inicial (padrão: o primeiro da sua conta; ou variável `HARNESS_MODEL`) |
 | `--effort low\|medium\|high` | Nível de raciocínio inicial |
-| `--mode ask\|auto` | `ask` (padrão) confirma gravações e acesso a URLs; `auto` não. Comandos sempre confirmam |
+| `--lang en\|pt_br` | Idioma (a interface web lembra a última escolha; padrão `en`) |
 | `--port N` / `--no-browser` | Porta da interface / não abrir o navegador |
 | `--login` / `--logout` | Apenas entrar / sair |
 
 ## Segurança
 
-- **Sandbox de pasta para as ferramentas de arquivo.** Todo caminho é resolvido (links simbólicos, junções, `..`) e precisa ficar dentro da pasta escolhida. O código do próprio harness e as sessões salvas são somente leitura para o agente.
+- **Limite de pasta para as ferramentas de arquivo.** Todo caminho é resolvido (links simbólicos, junções, `..`). Caminhos fora da pasta escolhida são recusados, a menos que você aprove aquele acesso específico em um diálogo vermelho; a aprovação vale só para aquela chamada. O código do próprio harness e as sessões salvas continuam somente leitura mesmo assim, e `~/.pyharness` (seus tokens de login) nunca é acessível.
 - **Rede.** `fetch_url` só faz GET e bloqueia localhost e endereços privados, inclusive em redirecionamentos.
 - **Widgets.** O HTML escrito pelo modelo roda em um iframe isolado, com origem opaca e uma CSP que bloqueia qualquer requisição de rede; scripts só podem carregar bibliotecas de cdnjs e jsDelivr.
 - **Interface local.** Escuta apenas em `127.0.0.1`, exige um token aleatório por execução e valida o cabeçalho `Host`.
 - **Credenciais.** Os tokens de login ficam em `~/.pyharness/auth.json`.
-- **O que *não* tem sandbox:** comandos de shell. Eles rodam com as suas permissões e podem mexer em qualquer lugar do computador. A única proteção é a sua aprovação: leia o comando em si, não só a explicação. Cuidado também com *prompt injection* vindo de páginas da web lidas pelo agente.
+- **O que *não* tem sandbox:** comandos de shell. Eles rodam com as suas permissões e podem mexer em qualquer lugar do computador. A única proteção é a sua aprovação: leia o comando em si, não só a explicação. O harness também procura nos comandos caminhos fora da pasta de trabalho e deixa o diálogo vermelho quando encontra, mas isso é feito no melhor esforço (ele não enxerga caminhos que o shell monta na hora): um comando em cor normal não é prova de segurança. Cuidado também com *prompt injection* vindo de páginas da web lidas pelo agente.
 
 ## Bom saber
 

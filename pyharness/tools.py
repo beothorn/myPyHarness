@@ -4,6 +4,7 @@ import html
 import ipaddress
 import os
 import re
+import shlex
 import signal
 import socket
 import subprocess
@@ -12,6 +13,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
+
+from .i18n import t as tr
 
 MAX_OUT = 30000
 MAX_WRITE = 2_000_000
@@ -27,6 +30,9 @@ class Sandbox:
     def __init__(self, root, extra_protected=()):
         self.root = os.path.realpath(root)
         self.cancel = None  # threading.Event set by the agent; lets Stop interrupt a running command
+        self.allow_outside = False  # True only while running one call the user explicitly approved (red prompt)
+        # Never reachable, even with approval: the login tokens would end up in the conversation.
+        self.blocked = [os.path.realpath(os.path.join(os.path.expanduser("~"), ".pyharness"))]
         # The harness' own source is read-only to the agent, so it cannot rewrite its guard rails.
         self.protected = [PKG_DIR, os.path.join(os.path.dirname(PKG_DIR), "harness.py"),
                           *extra_protected]
@@ -45,7 +51,9 @@ class Sandbox:
             raise ToolError("invalid path (alternate data streams not allowed)")
         p = rel if os.path.isabs(rel) else os.path.join(self.root, rel)
         real = os.path.realpath(p)  # resolves symlinks/junctions and '..'
-        if not self._inside(real, self.root):
+        if self.is_blocked(real):
+            raise ToolError("this location is never accessible to the agent (it holds login credentials)")
+        if not self.allow_outside and not self._inside(real, self.root):
             raise ToolError(f"path is outside the project folder: {rel}")
         if write:
             for prot in self.protected:
@@ -55,7 +63,59 @@ class Sandbox:
         return real
 
     def rel(self, real):
+        if not self._inside(real, self.root):
+            return real  # outside the project (user-approved access): show the full path
         return os.path.relpath(real, self.root).replace(os.sep, "/")
+
+    def is_blocked(self, real):
+        return any(real == b or self._inside(real, b) for b in self.blocked)
+
+    def real(self, rel):
+        """Resolved path for `rel`, or None if it is not a valid path string."""
+        if not isinstance(rel, str) or not rel or "\0" in rel:
+            return None
+        return os.path.realpath(rel if os.path.isabs(rel) else os.path.join(self.root, rel))
+
+    def is_outside(self, rel):
+        real = self.real(rel)
+        return real is not None and not self._inside(real, self.root)
+
+    _SAFE = {"/dev/null", "/dev/zero", "/dev/stdin", "/dev/stdout", "/dev/stderr", "nul"}
+    _SWITCH = re.compile(r"^/[A-Za-z?](:.*)?$")  # cmd.exe switches such as /c or /s
+    _ENVPATH = re.compile(r"^(\$\{?(HOME|USERPROFILE|APPDATA|LOCALAPPDATA|TMPDIR|TEMP|TMP)\}?|"
+                          r"%(USERPROFILE|HOMEPATH|HOMEDRIVE|APPDATA|LOCALAPPDATA|TEMP|TMP)%)", re.I)
+
+    def command_outside_paths(self, command, cwd):
+        """Best effort: paths a shell command mentions that resolve outside the project folder.
+        This is a heuristic for warning the user; it cannot see paths built by the shell at run time."""
+        cands = set(re.findall(r"""[^\s"'<>|;&()=,]+""", command))
+        try:
+            cands.update(shlex.split(command, posix=(os.name != "nt")))
+        except ValueError:
+            pass
+        out = set()
+        for c in cands:
+            c = c.strip("\"'`")
+            if not c or c.lower() in self._SAFE or (os.name == "nt" and self._SWITCH.match(c)):
+                continue
+            if self._ENVPATH.match(c):
+                out.add(c)  # cannot be resolved reliably: flag it
+                continue
+            parts = re.split(r"[\\/]", c)
+            pathlike = c.startswith(("/", "~", "\\")) or re.match(r"^[A-Za-z]:[\\/]", c) or ".." in parts
+            if not pathlike:
+                continue
+            p = os.path.expanduser(c)
+            real = os.path.realpath(p if os.path.isabs(p) else os.path.join(cwd, p))
+            if self._inside(real, self.root):
+                continue
+            drive, rest = os.path.splitdrive(real)
+            first = rest.strip(os.sep).split(os.sep)[0]
+            # '/pattern/d' (a sed expression) is not a path: require the top-level folder to exist
+            if c.startswith("/") and first and not os.path.exists(drive + os.sep + first):
+                continue
+            out.add(real)
+        return sorted(out)
 
 
 def _cap(s, n=MAX_OUT):
@@ -269,12 +329,53 @@ def run_command(sb, command, explanation="", cwd=".", timeout=60):
     return f"{head}\n{text}" if text.strip() else head
 
 
-def _command_prompt(a):
-    return ("EXECUTAR COMANDO (sem sandbox: roda no seu computador com as suas permissões)\n\n"
-            f"O que faz (explicação do modelo):\n{a.get('explanation') or '(sem explicação)'}\n\n"
-            f"Comando:\n{a.get('command', '')}\n\n"
-            f"Pasta: {a.get('cwd') or '.'}  ·  tempo máximo: {a.get('timeout') or 60}s\n"
-            "⚠ A explicação foi escrita pelo modelo; confira o comando em si antes de permitir.")
+def _command_prompt(a, lang):
+    return (tr(lang, "cmd.title") + "\n\n"
+            f"{tr(lang, 'cmd.what')}\n{a.get('explanation') or tr(lang, 'cmd.no_expl')}\n\n"
+            f"{tr(lang, 'cmd.command')}\n{a.get('command', '')}\n\n"
+            + tr(lang, "cmd.folder", cwd=a.get("cwd") or ".", t=a.get("timeout") or 60) + "\n"
+            + tr(lang, "cmd.warn"))
+
+
+def _write_prompt(a, lang):
+    c = str(a.get("content", ""))
+    return tr(lang, "p.write", path=a.get("path"), n=len(c)) + "\n\n" + c[:1500]
+
+
+def _edit_prompt(a, lang):
+    return tr(lang, "p.edit", path=a.get("path"), old=str(a.get("old", ""))[:800], new=str(a.get("new", ""))[:800])
+
+
+def _fetch_prompt(a, lang):
+    return tr(lang, "p.fetch", url=a.get("url"))
+
+
+READ_TOOLS = ("list_dir", "read_file", "grep", "dir_sizes")
+WRITE_TOOLS = ("write_file", "edit_file")
+
+
+def outside_access(sb, name, args):
+    """-> (kind, [resolved outside paths]); kind is 'read' | 'write' | 'command' or None when everything is inside."""
+    if not isinstance(args, dict):
+        return None, []
+    if name in READ_TOOLS or name in WRITE_TOOLS:
+        p = args.get("path", "." if name in READ_TOOLS else None)
+        real = sb.real(p)
+        if real is None or not sb.is_outside(p) or sb.is_blocked(real):
+            return None, []  # inside, invalid, or hard-blocked (the tool itself will refuse)
+        return ("read" if name in READ_TOOLS else "write"), [real]
+    if name == "run_command":
+        cwd = args.get("cwd") or "."
+        paths = []
+        base = sb.real(cwd) or sb.root
+        if sb.is_outside(cwd):
+            paths.append(base)
+        cmd = args.get("command")
+        if isinstance(cmd, str):
+            paths += sb.command_outside_paths(cmd, base)
+        paths = sorted(set(paths))
+        return ("command", paths) if paths else (None, [])
+    return None, []
 
 
 # ---------------------------------------------------------------- network tools
@@ -366,8 +467,8 @@ def web_search(sb, query):
 
 
 # ---------------------------------------------------------------- registry
-def _t(name, desc, props, required, fn, approval=None, always_ask=False):
-    return {"name": name, "description": desc, "fn": fn, "approval": approval, "always_ask": always_ask,
+def _t(name, desc, props, required, fn, approval=None):
+    return {"name": name, "description": desc, "fn": fn, "approval": approval,
             "schema": {"type": "function", "name": name, "description": desc, "strict": False,
                        "parameters": {"type": "object", "properties": props, "required": required}}}
 
@@ -379,21 +480,21 @@ TOOLS = {t["name"]: t for t in [
     _t("list_dir", "List files in a directory of the project.", {"path": S}, [], list_dir),
     _t("read_file", "Read a text file with line numbers.", {"path": S, "offset": I, "limit": I}, ["path"], read_file),
     _t("write_file", "Create or overwrite a file in the project.", {"path": S, "content": S}, ["path", "content"],
-       write_file, lambda a: f"GRAVAR {a.get('path')} ({len(a.get('content', ''))} caracteres)\n\n{a.get('content', '')[:1500]}"),
+       write_file, _write_prompt),
     _t("edit_file", "Replace exact text in a file. 'old' must match once unless replace_all.",
        {"path": S, "old": S, "new": S, "replace_all": {"type": "boolean"}}, ["path", "old", "new"], edit_file,
-       lambda a: f"EDITAR {a.get('path')}\n--- antes\n{a.get('old', '')[:800]}\n+++ depois\n{a.get('new', '')[:800]}"),
+       _edit_prompt),
     _t("dir_sizes", "Disk usage of each sub-folder/file in a folder, largest first (like du). depth=1 lists immediate children; use depth 2-3 to see nested folders.",
        {"path": S, "depth": I, "top": I}, [], dir_sizes),
     _t("run_command", "Run a shell command on the user's computer. The user is shown the command and your explanation and must approve it first; if they refuse you get an error saying so, otherwise you get the exit code and output. Non-interactive commands only (no stdin).",
        {"command": S, "explanation": {"type": "string", "description": "Plain-language explanation for the user of exactly what the command does and why."},
         "cwd": S, "timeout": {"type": "integer", "description": "seconds, default 60, max 300"}},
-       ["command", "explanation"], run_command, _command_prompt, always_ask=True),
+       ["command", "explanation"], run_command, _command_prompt),
     _t("find_files", "Find files by glob pattern, e.g. '*.py' or 'src/*.js'.", {"pattern": S}, ["pattern"], find_files),
     _t("grep", "Regex search in files.", {"pattern": S, "path": S, "include": S}, ["pattern"], grep),
     _t("web_search", "Search the web (DuckDuckGo). Returns titles, URLs, snippets.", {"query": S}, ["query"], web_search),
     _t("fetch_url", "HTTP GET a public web page and return its text.", {"url": S}, ["url"], fetch_url,
-       lambda a: f"ACESSAR URL {a.get('url')}"),
+       _fetch_prompt),
 ]}
 
 

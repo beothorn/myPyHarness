@@ -3,6 +3,7 @@ import json
 import time
 
 from . import llm
+from .i18n import t
 
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 
@@ -58,47 +59,47 @@ def windows(p):
     return out
 
 
-def _label(mins):
+def _label(mins, lang):
     if mins is None:
-        return "Janela"
+        return t(lang, "w.generic")
     if abs(mins - 300) < 5:
-        return "Janela de 5 horas"
+        return t(lang, "w.5h")
     if abs(mins - 10080) < 60:
-        return "Janela semanal"
-    return f"Janela de {mins / 60:.0f} h" if mins >= 120 else f"Janela de {mins:.0f} min"
+        return t(lang, "w.week")
+    return t(lang, "w.hours", h=f"{mins / 60:.0f}") if mins >= 120 else t(lang, "w.mins", m=f"{mins:.0f}")
 
 
-def _remaining(ts):
+def _remaining(ts, lang):
     secs = int(ts - time.time())
     if secs <= 0:
-        return "agora"
+        return t(lang, "t.now")
     d, r = divmod(secs, 86400)
     h, r = divmod(r, 3600)
     m = r // 60
     parts = ([f"{d}d"] if d else []) + ([f"{h}h"] if h else []) + ([f"{m}min"] if m or not (d or h) else [])
-    return "em " + " ".join(parts) + time.strftime(" (%d/%m %H:%M)", time.localtime(ts))
+    return t(lang, "t.in", parts=" ".join(parts)) + time.strftime(" (%d/%m %H:%M)", time.localtime(ts))
 
 
-def format_status(payload, error, who, model, effort, tokens):
-    lines = ["📊 Status de uso"]
+def format_status(payload, error, who, model, effort, tokens, lang="en"):
+    lines = [t(lang, "st.title")]
     meta = []
     if who:
-        meta.append(f"conta {who}")
+        meta.append(t(lang, "st.account", who=who))
     if isinstance(payload, dict) and payload.get("plan_type"):
-        meta.append(f"plano {payload['plan_type']}")
+        meta.append(t(lang, "st.plan", plan=payload["plan_type"]))
     if meta:
         lines.append(" · ".join(meta))
-    lines.append(f"Modelo: {model or '(nenhum)'} · nível: {effort}")
+    lines.append(t(lang, "st.model", model=model or t(lang, "st.none"), effort=effort))
     if error:
-        lines.append(f"Não foi possível obter o uso da conta: {error}")
+        lines.append(t(lang, "st.error", err=error))
     elif isinstance(payload, dict):
         ws = windows(payload)
         for used, mins, reset in ws:
-            s = f"• {_label(mins)}: {used:.0f}% usado · {100 - used:.0f}% disponível"
+            s = t(lang, "st.window", label=_label(mins, lang), used=f"{used:.0f}", left=f"{100 - used:.0f}")
             if reset:
-                s += f" · renova {_remaining(reset)}"
+                s += t(lang, "st.renews", when=_remaining(reset, lang))
             lines.append(s)
         if not ws:
-            lines.append("Formato de resposta desconhecido:\n" + json.dumps(payload, ensure_ascii=False)[:800])
-    lines.append(f"Tokens nesta sessão: {tokens.get('in', 0)} entrada · {tokens.get('out', 0)} saída")
+            lines.append(t(lang, "st.unknown") + "\n" + json.dumps(payload, ensure_ascii=False)[:800])
+    lines.append(t(lang, "st.tokens", i=tokens.get("in", 0), o=tokens.get("out", 0)))
     return "\n".join(lines)

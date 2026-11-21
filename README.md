@@ -15,15 +15,17 @@ myPyHarness is the opposite: a handful of Python files you copy next to your pro
 
 - **Drop and use.** Copy the folder, run one command. Only Python 3.8+ is needed.
 - **Sign in with ChatGPT.** One click in the browser; tokens live in your home folder, never in your project.
-- **Works inside a folder you choose.** The agent can read and write there and nowhere else.
+- **Works inside a folder you choose.** Anything outside it needs your explicit approval, every time, in a red dialog.
 - **Browser UI or terminal.** A small local web page (default) or a plain `--cli` chat.
 - **Pick the model and reasoning level** from the list your account can actually use, and press **Status** to see how much of your plan limits you have used.
 - **Rich answers.** The model answers in HTML and may build interactive widgets: styled blocks, buttons, SVG charts, JavaScript. They run in an isolated sandbox: the widget code cannot reach the app, your files or the network.
 - **A useful toolbox.** List, read, search, write and edit files; folder sizes; web search and page fetching; shell commands.
-- **You stay in control.** Writes, edits and URL fetches ask first (switchable). Shell commands **always** ask: you see the command, a plain-language explanation and the folder, then allow or deny. The agent is told what you decided.
+- **You stay in control.** Every write, edit, URL fetch and shell command asks first; there is no "auto-approve" switch. Commands show the command itself, a plain-language explanation and the folder. The agent is told what you decided. Reading, changing or running something **outside the working folder** is shown in red with a warning on top ("The agent wants to read content, make sure it is not sensitive content").
 - **Sessions are saved** after every reply and can be resumed later from the start page.
-- **`AGENTS.md` onboarding.** In a folder without one, the agent offers to interview you about the project and write it. If one exists, it is used as project instructions.
-- **Portuguese interface.**
+- **`AGENTS.md` onboarding.** In a folder without one, the agent offers to interview you about the project and write it. If one exists, a new empty chat tells the model to read it first.
+- **English and Brazilian Portuguese (`pt_br`).** Pick the language on the first screen; every dialog follows it, and so do the model's answers. The choice is remembered.
+- **Full-width chat** with a "Thinking..." indicator while the agent works.
+- **Clean or full view.** A **Show commands** toggle in the header (on by default) switches between the full view, to review exactly what was executed, and a clean view with only the messages exchanged. Permission dialogs that are waiting for you always stay visible. The choice is remembered in your browser.
 
 ## Quick start
 
@@ -35,13 +37,13 @@ myPyHarness is the opposite: a handful of Python files you copy next to your pro
    ```
 
    (On Windows, `py harness.py` also works.) Your browser opens the app.
-3. On the start page:
+3. On the start page, pick the language (English / Português (BR)), then:
    1. **Login**: sign in with your ChatGPT account.
-   2. **Escolher diretório**: pick the project folder the agent may work in.
-   3. **Iniciar**: enabled once both are done.
-4. Chat. Use the header to change model/level, **Status** for usage, **Nova conversa** for a fresh chat, **Configuração** to go back to the start page.
+   2. **Choose directory**: pick the project folder the agent may work in.
+   3. **Start**: enabled once both are done.
+4. Chat. Use the header to change model/level, **Status** for usage, **New chat** for a fresh chat, **Configuration** to go back to the start page.
 
-Previous conversations appear under "Sessões anteriores" on the start page. They are stored as JSON in `myPyHarnessSessions/`, inside the directory you launched from.
+Previous conversations appear under "Previous sessions" on the start page. They are stored as JSON in `myPyHarnessSessions/`, inside the directory you launched from.
 
 ## Options
 
@@ -51,18 +53,18 @@ Previous conversations appear under "Sessões anteriores" on the start page. The
 | `--cli` | Terminal chat instead of the web UI |
 | `--model NAME` | Initial model (default: the first one your account offers; or env `HARNESS_MODEL`) |
 | `--effort low\|medium\|high` | Initial reasoning level |
-| `--mode ask\|auto` | `ask` (default) confirms writes and URL fetches; `auto` doesn't. Commands always confirm |
+| `--lang en\|pt_br` | Language (the web UI remembers the last choice; default `en`) |
 | `--port N` / `--no-browser` | Web UI port / don't open the browser |
 | `--login` / `--logout` | Only sign in / sign out |
 
 ## Safety model
 
-- **Folder sandbox for file tools.** Every path is resolved (symlinks, junctions, `..`) and must stay inside the chosen folder. The harness's own code and the saved sessions are read-only to the agent.
+- **Folder boundary for file tools.** Every path is resolved (symlinks, junctions, `..`). Paths outside the chosen folder are refused unless you approve that specific access in a red dialog; the approval covers that one call. The harness's own code and the saved sessions stay read-only even then, and `~/.pyharness` (your login tokens) is never reachable.
 - **Network.** `fetch_url` is GET-only and blocks localhost and private addresses, including on redirects.
 - **Widgets.** Model-written HTML runs in a sandboxed iframe with an opaque origin and a CSP that blocks all network requests; scripts may load libraries only from cdnjs and jsDelivr.
 - **Local UI.** It listens on `127.0.0.1` only, requires a random per-run token and checks the `Host` header.
 - **Credentials.** Login tokens are stored in `~/.pyharness/auth.json`.
-- **What is *not* sandboxed:** shell commands. They run with your permissions and can touch anything on the machine. Their only protection is your approval, so read the command itself, not just the explanation. Also beware of prompt injection from web pages the agent reads.
+- **What is *not* sandboxed:** shell commands. They run with your permissions and can touch anything on the machine. Their only protection is your approval, so read the command itself, not just the explanation. The harness also scans commands for paths outside the working folder and turns the dialog red when it finds one, but that is best-effort (it cannot see paths a shell builds at run time): a normal-coloured command is not proof of safety. Also beware of prompt injection from web pages the agent reads.
 
 ## Things to know
 
