@@ -1,0 +1,11 @@
+# Saved chat sessions: contain conversation history and local paths
+myPyHarnessSessions/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Local credentials/config, just in case
+.pyharness/
+auth.json
+.env

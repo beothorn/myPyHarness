@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>pyharness</title>
+<style>
+:root{--bg:#fff;--fg:#1f2328;--mut:#656d76;--bd:#d0d7de;--card:#f6f8fa;--acc:#0969da;--ok:#1a7f37;--bad:#cf222e}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--mut:#8d96a0;--bd:#30363d;--card:#161b22;--acc:#4493f8;--ok:#3fb950;--bad:#f85149}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,Segoe UI,sans-serif}
+button,select{background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:6px 14px;font:inherit;cursor:pointer}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff}button:disabled{opacity:.5;cursor:default}
+/* setup */
+#setup{max-width:680px;margin:0 auto;padding:40px 16px}
+#setup h1{margin:0 0 4px}.sub{color:var(--mut);margin:0 0 24px}
+.step{display:flex;gap:12px;align-items:center;border:1px solid var(--bd);border-radius:8px;padding:12px;margin:10px 0;background:var(--card)}
+.step button{min-width:170px}.step .info{flex:1;min-width:0;word-break:break-all;color:var(--mut);font-size:14px}.step .info.ok{color:var(--ok)}
+#go-start{width:100%;margin-top:8px;padding:10px}#msg{margin:10px 0;min-height:20px;font-size:13px;color:var(--acc);white-space:pre-wrap;word-break:break-all}#msg.err{color:var(--bad)}
+h2{font-size:15px;margin:28px 0 8px}.sess{display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--bd);padding:8px 0}
+.sess .t1{flex:1;min-width:0}.sess .t1 b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sess small{color:var(--mut);word-break:break-all}
+/* chat */
+#chat{display:flex;flex-direction:column;height:100vh}
+header{display:flex;gap:12px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--bd);flex-wrap:wrap}
+header b{font-size:16px}#st{color:var(--mut);font-size:13px;flex:1;min-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#log{flex:1;overflow:auto;padding:16px;max-width:900px;width:100%;margin:0 auto}
+.m{margin:10px 0;white-space:pre-wrap;word-wrap:break-word}.u{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px 12px}
+.t{font:13px ui-monospace,Consolas,monospace;color:var(--mut);border-left:3px solid var(--bd);padding:2px 10px;margin:6px 0;white-space:pre-wrap;word-wrap:break-word}
+.t.err{color:var(--bad);border-color:var(--bad)}.t.info{color:var(--acc);border-color:var(--acc)}
+.m.st{border:1px solid var(--acc);border-radius:8px;padding:8px 12px;background:var(--card);font-size:14px}
+iframe.w{display:block;width:100%;border:0;margin:10px 0;height:40px;background:transparent}
+#offer{max-width:900px;width:calc(100% - 32px);margin:0 auto 8px;border:1px solid var(--acc);border-radius:8px;padding:10px 12px;background:var(--card);display:flex;gap:8px;align-items:center;flex-wrap:wrap}#offer span{flex:1;min-width:220px;font-size:14px}
+.ap{border:1px solid var(--acc);border-radius:8px;padding:10px;margin:10px 0;background:var(--card)}
+.ap pre{margin:0 0 8px;white-space:pre-wrap;word-wrap:break-word;font:13px ui-monospace,Consolas,monospace;max-height:260px;overflow:auto}
+form{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--bd);max-width:900px;width:100%;margin:0 auto}
+textarea{flex:1;resize:none;height:56px;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:8px;font:inherit}
+/* folder dialog */
+dialog{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:10px;width:min(640px,92vw);padding:16px}
+dialog::backdrop{background:#0008}#cur{font:13px ui-monospace,Consolas,monospace;word-break:break-all;margin:8px 0}
+#dirs{border:1px solid var(--bd);border-radius:6px;height:300px;overflow:auto;margin-bottom:12px}
+#dirs div{padding:5px 10px;cursor:pointer;font-size:14px}#dirs div:hover{background:var(--card)}
+.row{display:flex;gap:8px;justify-content:flex-end}#pin{flex:1;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:5px 8px;font:inherit}
+</style></head><body>
+
+<div id="setup">
+ <h1>pyharness</h1><p class="sub">Agente Codex com acesso restrito a uma pasta. Faça login e escolha o diretório para começar.</p>
+ <div class="step"><button id="login">Login</button><span class="info" id="login-info"></span></div>
+ <div class="step"><button id="dir">Escolher diretório</button><span class="info" id="dir-info"></span></div>
+ <div id="msg"></div>
+ <button class="p" id="go-start" disabled>Iniciar</button>
+ <h2>Sessões anteriores</h2><div id="sessions"></div><small class="sub" id="sess-folder"></small>
+</div>
+
+<div id="chat" hidden>
+ <header><b>pyharness</b><span id="st"></span>
+ <select id="model" title="Modelo"></select><select id="effort" title="Nível de raciocínio"></select><button id="status" title="Mostrar uso e limites da conta no chat">Status</button>
+ <select id="mode" title="Modo de aprovação (comandos sempre perguntam)"><option value="ask">Perguntar antes de gravar/acessar URLs</option><option value="auto">Gravar/acessar URLs sem perguntar</option></select>
+ <button id="newchat">Nova conversa</button><button id="home">Configuração</button></header>
+ <div id="log"></div>
+ <div id="offer" hidden><span>Este diretório não tem um <b>AGENTS.md</b>. Quer que eu crie um? Eu faço algumas perguntas sobre o projeto e escrevo o arquivo.</span><button class="p" id="ag-yes">Criar AGENTS.md</button><button id="ag-no">Não, obrigado</button></div>
+ <form id="f"><textarea id="in" placeholder="Pergunte ao agente… (Enter envia, Shift+Enter quebra linha)"></textarea>
+ <button class="p" id="send">Enviar</button><button type="button" id="stop" disabled>Parar</button></form>
+</div>
+
+<dialog id="dlg"><b>Escolher diretório do projeto</b>
+<p style="margin:4px 0;color:var(--mut);font-size:13px">O agente só poderá ler e gravar dentro dele.</p>
+<div class="row" style="justify-content:stretch"><input id="pin" placeholder="Digite ou cole um caminho"><button id="go">Ir</button></div>
+<div id="cur"></div><div id="dirs"></div>
+<div class="row"><button id="cancel">Cancelar</button><button class="p" id="pick">Usar esta pasta</button></div></dialog>
+
+<script>
+const TOKEN="__TOKEN__",$=id=>document.getElementById(id),log=$("log");
+let next=0,cur=null,st={},view=null;
+const api=(p,b)=>fetch("/api/"+p,{method:b?"POST":"GET",headers:{"X-Token":TOKEN,"Content-Type":"application/json"},body:b?JSON.stringify(b):undefined}).then(r=>r.json());
+function add(cls,text){const d=document.createElement("div");d.className=cls;d.textContent=text;log.appendChild(d);scroll();return d}
+/* Model answers are HTML. Each renders in a sandboxed iframe (opaque origin: no access to this page, the token or the network). */
+const WCSP="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'";
+const WHEAD='<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="'+WCSP+'"><meta name="color-scheme" content="light dark"><style>'+
+':root{--bg:#fff;--fg:#1f2328;--mut:#656d76;--bd:#d0d7de;--card:#f6f8fa;--acc:#0969da;--ok:#1a7f37;--bad:#cf222e}'+
+'@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--mut:#8d96a0;--bd:#30363d;--card:#161b22;--acc:#4493f8;--ok:#3fb950;--bad:#f85149}}'+
+'html,body{margin:0}body{display:flow-root;font:15px/1.5 system-ui,Segoe UI,sans-serif;color:var(--fg);background:transparent;overflow-wrap:anywhere}'+
+'pre{background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:8px;overflow:auto}code{font-family:ui-monospace,Consolas,monospace;font-size:.92em}'+
+'table{border-collapse:collapse}td,th{border:1px solid var(--bd);padding:4px 8px}a{color:var(--acc)}'+
+'button{background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:5px 12px;font:inherit;cursor:pointer}'+
+'</style><script>(function(){var last=0;function send(){var h=document.body?Math.ceil(document.body.getBoundingClientRect().height)+2:0;'+
+'if(h&&h!==last){last=h;parent.postMessage({pyharness:"h",h:h},"*")}}'+
+'addEventListener("DOMContentLoaded",function(){new ResizeObserver(send).observe(document.body);send()});addEventListener("load",send);'+
+'window.harness={ask:function(t){parent.postMessage({pyharness:"ask",text:String(t)},"*")}}})();<\/script></head><body>';
+function renderAnswer(text){
+ let t=text.trim();const fence=t.match(/^```(?:html)?\s*\n([\s\S]*?)\n```$/);if(fence)t=fence[1];
+ if(!/<[a-zA-Z][^>]*>/.test(t)){const d=document.createElement("div");d.className="m";d.textContent=text;return d}
+ const f=document.createElement("iframe");f.className="w";f.setAttribute("sandbox","allow-scripts");
+ f.srcdoc=WHEAD+t+"</body></html>";
+ return f}
+addEventListener("message",e=>{const d=e.data;if(!d||!d.pyharness)return;
+ const f=[...document.querySelectorAll("iframe.w")].find(x=>x.contentWindow===e.source);if(!f)return;
+ if(d.pyharness==="h"){const near=log.scrollHeight-log.scrollTop-log.clientHeight<120;
+  f.style.height=Math.min(Math.max(+d.h||20,20),1600)+"px";if(near)scroll()}
+ else if(d.pyharness==="ask"){$("in").value=String(d.text).slice(0,4000);$("in").focus()}});
+function scroll(){log.scrollTop=log.scrollHeight}
+function say(text,err){$("msg").textContent=text;$("msg").className=err?"err":""}
+function handle(e){
+ switch(e.type){
+  case"user":cur=null;add("m u",e.text);break;
+  case"status":cur=null;add("m st",e.text);break;
+  case"assistant":cur=null;log.appendChild(renderAnswer(e.text));scroll();break;
+  case"delta":if(!cur)cur=add("m","");cur.textContent+=e.text;scroll();break;
+  case"message_end":if(cur){cur.replaceWith(renderAnswer(cur.textContent));scroll()}cur=null;break;
+  case"tool_call":add("t","▶ "+e.name+" "+JSON.stringify(e.args).slice(0,300));break;
+  case"tool_result":add("t","  "+e.output.slice(0,600));break;
+  case"info":add("t info",e.text);say(e.text);break;
+  case"error":add("t err",e.text);say(e.text,true);break;
+  case"reset":log.innerHTML="";cur=null;say("");break;
+  case"approval":{const d=document.createElement("div");d.className="ap";d.id="ap"+e.id;
+   const pre=document.createElement("pre");pre.textContent=e.text;d.appendChild(pre);
+   for(const[l,a,c]of[["Permitir",true,"p"],["Negar",false,""]]){const b=document.createElement("button");b.textContent=l;b.className=c;b.style.marginRight="8px";
+    b.onclick=()=>api("approve",{id:e.id,allow:a});d.appendChild(b)}
+   log.appendChild(d);scroll();break}
+  case"approval_done":{const d=$("ap"+e.id);if(d){d.innerHTML="";d.textContent=e.allow?"✔ aprovado":"✘ negado"}break}
+ }}
+function fmt(t){return new Date(t*1000).toLocaleString("pt-BR")}
+async function loadSessions(){
+ const r=await api("sessions"),box=$("sessions");box.innerHTML="";
+ $("sess-folder").textContent="Salvas em: "+r.folder;
+ if(!r.sessions.length){box.textContent="Nenhuma sessão salva ainda.";box.style.color="var(--mut)";return}
+ for(const s of r.sessions){
+  const d=document.createElement("div");d.className="sess";
+  const t=document.createElement("div");t.className="t1";
+  const b=document.createElement("b");b.textContent=s.title;const sm=document.createElement("small");sm.textContent=fmt(s.updated)+" · "+s.root+(s.root_exists?"":" (pasta não existe mais)");
+  t.append(b,sm);
+  const btn=document.createElement("button");btn.textContent="Continuar";btn.disabled=!s.root_exists||!st.logged_in;
+  btn.title=st.logged_in?"":"Faça login primeiro";
+  btn.onclick=async()=>{const x=await api("resume",{id:s.id});if(x.error)say(x.error,true)};
+  d.append(t,btn);box.appendChild(d)}}
+function render(){
+ const chat=!!st.started;
+ $("setup").hidden=chat;$("chat").hidden=!chat;
+ if(view!==chat){view=chat;if(!chat)loadSessions()}
+ if(chat){
+  $("st").textContent=(st.title||"Nova conversa")+" · "+st.root;
+  if(!modelsLoaded){modelsLoaded=true;loadModels()}
+  syncModel();
+  $("offer").hidden=!st.offer_agents;
+  $("mode").value=st.mode;$("send").disabled=st.busy;$("stop").disabled=!st.busy;$("home").disabled=st.busy;$("newchat").disabled=st.busy;
+ }else{
+  const li=$("login-info");li.textContent=st.logged_in?"✔ Conectado"+(st.who?" como "+st.who:""):"Não conectado";li.className="info"+(st.logged_in?" ok":"");
+  const di=$("dir-info");di.textContent=st.root?"✔ "+st.root:"Nenhum diretório escolhido";di.className="info"+(st.root?" ok":"");
+  $("go-start").disabled=!(st.logged_in&&st.root);
+ }}
+let lastLogin=null,modelsLoaded=false,models=[],shown="";
+async function loadModels(){
+ const r=await api("models");models=r.models||[];
+ const sel=$("model");sel.innerHTML="";
+ for(const m of models){const o=document.createElement("option");o.value=m.slug;o.textContent=m.name===m.slug?m.slug:m.name+" ("+m.slug+")";sel.appendChild(o)}
+ if(!models.length){const o=document.createElement("option");o.textContent="(sem modelos)";sel.appendChild(o);
+  add("t err","Não foi possível obter a lista de modelos"+(r.error?": "+r.error:"")+". Tente novamente em Configuração → Iniciar.");modelsLoaded=false}
+ shown="";syncModel()}
+function syncModel(){
+ const m=models.find(x=>x.slug===st.model);if(!m)return;
+ const key=m.slug+"|"+st.effort;if(key===shown&&$("model").value===m.slug)return;shown=key;
+ $("model").value=m.slug;const ef=$("effort");ef.innerHTML="";
+ for(const e of m.efforts){const o=document.createElement("option");o.value=e;o.textContent=e;ef.appendChild(o)}
+ ef.value=st.effort}
+async function poll(){
+ try{const r=await api("events?since="+next);next=r.next;r.events.forEach(handle);st=r.status;
+  if(st.logged_in!==lastLogin){lastLogin=st.logged_in;if(!st.started)loadSessions()}
+  render();
+ }catch(e){}
+ setTimeout(poll,350)}
+$("f").onsubmit=async ev=>{ev.preventDefault();const t=$("in").value.trim();if(!t)return;
+ const r=await api("send",{text:t});if(r.ok)$("in").value=""};
+$("in").onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("f").requestSubmit()}};
+$("stop").onclick=()=>api("stop",{});
+$("login").onclick=()=>{say("Abrindo o navegador para login…");api("login",{})};
+$("model").onchange=async e=>{const r=await api("model",{model:e.target.value});if(r.error)alert(r.error)};
+$("effort").onchange=async e=>{const r=await api("model",{model:$("model").value,effort:e.target.value});if(r.error)alert(r.error)};
+$("ag-yes").onclick=()=>api("agents",{action:"create"});
+$("ag-no").onclick=()=>api("agents",{action:"decline"});
+$("status").onclick=()=>api("status",{});
+$("mode").onchange=e=>api("mode",{mode:e.target.value});
+$("go-start").onclick=async()=>{const r=await api("start",{});if(r.error)say(r.error,true)};
+$("newchat").onclick=async()=>{const r=await api("start",{});if(r.error)alert(r.error)};
+$("home").onclick=async()=>{const r=await api("home",{});if(r.error)alert(r.error)};
+/* folder picker */
+let browsing="";
+async function browse(p){const r=await api("browse"+(p!==undefined?"?path="+encodeURIComponent(p):""));
+ if(r.error){alert(r.error);return}
+ browsing=r.path;$("cur").textContent=r.path||"(unidades)";$("pin").value=r.path;$("pick").disabled=!r.path;
+ const box=$("dirs");box.innerHTML="";
+ const mk=(label,path)=>{const d=document.createElement("div");d.textContent=label;d.onclick=()=>browse(path);box.appendChild(d)};
+ if(r.parent!==null)mk("⬆ ..",r.parent);
+ r.dirs.forEach(x=>mk("📁 "+(r.path?x.slice(r.path.length).replace(/^[\\/]/,""):x),x))}
+$("dir").onclick=()=>{$("dlg").showModal();browse()};
+$("go").onclick=()=>browse($("pin").value);
+$("pin").onkeydown=e=>{if(e.key==="Enter")browse($("pin").value)};
+$("cancel").onclick=()=>$("dlg").close();
+$("pick").onclick=async()=>{const r=await api("setroot",{path:browsing});if(r.ok)$("dlg").close();else alert(r.error)};
+poll();
+</script></body></html>
