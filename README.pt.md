@@ -78,3 +78,7 @@ python -m unittest discover -s tests
 ```
 
 Estrutura: `harness.py` (entrada), `pyharness/` (`auth`, `llm`, `agent`, `tools`, `server` + `ui.html`, `sessions`, `status`), `tests/`.
+
+## Licença
+
+[Apache License 2.0](LICENSE).
