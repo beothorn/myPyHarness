@@ -17,6 +17,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+from . import __version__
 from .i18n import t
 
 CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"  # public Codex CLI client id
@@ -25,7 +26,7 @@ REDIRECT_PORT = 1455
 REDIRECT_URI = f"http://localhost:{REDIRECT_PORT}/auth/callback"
 SCOPE = "openid profile email offline_access"
 STORE = Path.home() / ".pyharness" / "auth.json"
-UA = "pyharness/0.1"
+UA = f"pyharness/{__version__}"
 
 
 class AuthError(Exception):

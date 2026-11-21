@@ -1,5 +1,7 @@
 # myPyHarness (Português)
 
+**Versão 1.0.0** · [Baixe a versão mais recente aqui](https://github.com/beothorn/myPyHarness/releases/latest/download/myPyHarness.zip) (um zip de todo o repositório)
+
 **Um *harness* de agente de IA simples: é só soltar numa pasta e usar.**
 Python puro, só biblioteca padrão: nada para instalar, sem `pip`, sem executáveis.
 
@@ -78,6 +80,17 @@ As conversas anteriores aparecem em "Sessões anteriores" na tela inicial. Ficam
 ```
 python -m unittest discover -s tests
 ```
+
+### Versões e releases
+
+A versão fica em `pyharness/__init__.py` (`__version__`, exibida por `python harness.py --version`) e segue o [versionamento semântico](https://semver.org). Uma release é uma tag git `vX.Y.Z` mais uma release no GitHub cujo único arquivo é `myPyHarness.zip`, um zip do repositório naquela tag:
+
+```
+git archive --format=zip --prefix=myPyHarness-X.Y.Z/ -o myPyHarness.zip vX.Y.Z
+gh release create vX.Y.Z myPyHarness.zip --title "vX.Y.Z" --notes "..."
+```
+
+O nome do arquivo é o mesmo em toda release, então o link de "versão mais recente" acima sempre aponta para a mais nova. Antes, atualize `__version__` e a linha de versão no topo dos dois READMEs (um teste confere se batem).
 
 Estrutura: `harness.py` (entrada), `pyharness/` (`auth`, `llm`, `agent`, `tools`, `server` + `ui.html`, `sessions`, `status`), `tests/`.
 

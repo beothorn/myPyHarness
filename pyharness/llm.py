@@ -5,6 +5,8 @@ import urllib.error
 import urllib.request
 import uuid
 
+from . import __version__
+
 BASE_URL = "https://chatgpt.com/backend-api/codex"
 
 
@@ -22,7 +24,7 @@ class Cancelled(Exception):
 def _headers(auth, accept="application/json"):
     token, account = auth.token()
     h = {"Authorization": f"Bearer {token}", "Accept": accept, "OpenAI-Beta": "responses=experimental",
-         "originator": "codex_cli_rs", "User-Agent": "pyharness/0.1"}
+         "originator": "codex_cli_rs", "User-Agent": f"pyharness/{__version__}"}
     if account:
         h["chatgpt-account-id"] = account
     return h

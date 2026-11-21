@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 
-from pyharness import i18n, llm
+from pyharness import __version__, i18n, llm
 from pyharness.agent import Agent
 from pyharness.auth import Auth, AuthError
 from pyharness.server import serve
@@ -69,6 +69,7 @@ def main():
     ap.add_argument("--model", default=DEFAULT_MODEL, help="default: the first model your account offers")
     ap.add_argument("--effort", default="medium", choices=["low", "medium", "high"])
     ap.add_argument("--lang", default=None, choices=list(i18n.LANGS), help="interface/answer language (web UI remembers the last choice)")
+    ap.add_argument("--version", action="version", version=f"myPyHarness {__version__}")
     ap.add_argument("--cli", action="store_true", help="terminal chat instead of the web UI")
     ap.add_argument("--login", action="store_true", help="sign in with ChatGPT and exit")
     ap.add_argument("--logout", action="store_true")

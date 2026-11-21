@@ -464,6 +464,26 @@ class OutsideFolderTests(unittest.TestCase):
         self.assertIsNone(self.prompts[0][1])
 
 
+class VersionTests(unittest.TestCase):
+    def test_version_is_consistent(self):
+        import re
+        from pyharness import __version__
+        self.assertRegex(__version__, r"^\d+\.\d+\.\d+$")
+        root = os.path.join(os.path.dirname(__file__), "..")
+        for name, label in (("README.md", "Version"), ("README.pt.md", "Versão")):
+            with open(os.path.join(root, name), encoding="utf-8") as f:
+                lines = f.read().splitlines()
+            self.assertIn(f"**{label} {__version__}**", lines[2], name)  # line right after the title
+            self.assertIn("/releases/latest/download/myPyHarness.zip", lines[2], name)
+
+    def test_cli_prints_version(self):
+        import subprocess
+        from pyharness import __version__
+        out = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "..", "harness.py"), "--version"],
+                             capture_output=True, text=True)
+        self.assertIn(__version__, out.stdout)
+
+
 class LanguageTests(unittest.TestCase):
     def test_every_key_exists_in_both_languages_with_same_placeholders(self):
         import string

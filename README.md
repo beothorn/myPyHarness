@@ -1,5 +1,7 @@
 # myPyHarness
 
+**Version 1.0.0** · [Download the latest version here](https://github.com/beothorn/myPyHarness/releases/latest/download/myPyHarness.zip) (a zip of the whole repository)
+
 **A simple AI agent harness you can just drop into a folder and use.**
 Pure Python standard library: nothing to install, no `pip`, no executables.
 
@@ -78,6 +80,17 @@ Previous conversations appear under "Previous sessions" on the start page. They 
 ```
 python -m unittest discover -s tests
 ```
+
+### Versioning and releases
+
+The version lives in `pyharness/__init__.py` (`__version__`, shown by `python harness.py --version`) and follows [semantic versioning](https://semver.org). A release is a git tag `vX.Y.Z` plus a GitHub release whose only asset is `myPyHarness.zip`, a zip of the repository at that tag:
+
+```
+git archive --format=zip --prefix=myPyHarness-X.Y.Z/ -o myPyHarness.zip vX.Y.Z
+gh release create vX.Y.Z myPyHarness.zip --title "vX.Y.Z" --notes "..."
+```
+
+The asset name stays the same on every release so the "latest version" link above always points to the newest one. Bump `__version__` and the version line at the top of both READMEs first (a test checks they match).
 
 Layout: `harness.py` (entry point), `pyharness/` (`auth`, `llm`, `agent`, `tools`, `server` + `ui.html`, `sessions`, `status`), `tests/`.
 
